@@ -1,4 +1,4 @@
-use std::{fmt::Result, path::PathBuf};
+use std::path::PathBuf;
 use tokio::sync::mpsc;
 
 use crate::sync_engine;

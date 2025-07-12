@@ -3,10 +3,16 @@ use database::Database;
 
 mod event_queue;
 use event_queue::{EventQueue, QueueEvent};
+use notify::{Event as NotifyEvent, RecursiveMode, Result as NotifyResult, Watcher};
 
-use crate::{event_queue::start_event_loop, sync_engine::FsEventKind};
-use std::path::PathBuf;
+use crate::sync_engine::FsEventKind;
+use std::{
+    path::{Path, PathBuf},
+    sync::mpsc,
+};
 pub mod sync_engine;
+
+mod file_watcher;
 
 #[tokio::main]
 async fn main() {
@@ -23,10 +29,18 @@ async fn main() {
 
     let event_loop_handle = tokio::spawn(event_queue::start_event_loop(receiver));
 
-    // Send test events
-    send_test_events(&queue).await;
+    let test_folder = PathBuf::from("test");
+    file_watcher::start_file_watcher(test_folder, queue.clone())
+        .await
+        .expect("[MAIN] Failed to start file watcher");
 
-    let _ = event_loop_handle.await;
+    println!("[MAIN] File watcher started. Waiting for events... (Press Ctrl+C to exit)");
+
+    // Wait for the event loop to finish (which won't happen unless there's an error)
+    // This keeps the program running indefinitely
+    if let Err(e) = event_loop_handle.await {
+        eprintln!("[MAIN] Event loop error: {:?}", e);
+    }
 }
 
 // Send a test event
@@ -45,4 +59,27 @@ async fn send_test_events(queue: &EventQueue) {
         .await;
 
     queue.send(QueueEvent::Shutdown).await;
+}
+
+fn notify_test() -> NotifyResult<()> {
+    let (tx, rx) = mpsc::channel::<NotifyResult<NotifyEvent>>();
+
+    // Use recommended_watcher() to automatically select the best implementation
+    // for your platform. The `EventHandler` passed to this constructor can be a
+    // closure, a `std::sync::mpsc::Sender`, a `crossbeam_channel::Sender`, or
+    // another type the trait is implemented for.
+    let mut watcher = notify::recommended_watcher(tx)?;
+
+    // Add a path to be watched. All files and directories at that path and
+    // below will be monitored for changes.
+    watcher.watch(Path::new("test"), RecursiveMode::Recursive)?;
+    // Block forever, printing out events as they come in
+    for res in rx {
+        match res {
+            Ok(event) => println!("event: {:?}", event),
+            Err(e) => println!("watch error: {:?}", e),
+        }
+    }
+
+    Ok(())
 }
