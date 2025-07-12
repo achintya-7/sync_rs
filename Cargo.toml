@@ -1,0 +1,11 @@
+[package]
+name = "sync_rs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+walkdir = "2"
+sha2 = "0.10"
+rusqlite = { version = "0.37.0", features = ["bundled"] }
+uuid = { version = "1", features = ["v4"] }
+tokio = { version = "1.46.1", features = ["full", "sync"] }
