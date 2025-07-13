@@ -67,10 +67,16 @@ fn map_notify_event(path: PathBuf, kind: &EventKind) -> Option<QueueEvent> {
             path,
             kind: FsEventKind::Modify,
         }),
-        EventKind::Create(_) => Some(QueueEvent::FileChanged {
-            path,
-            kind: FsEventKind::Create,
-        }),
+        EventKind::Create(_) => {
+            if path.is_dir() {
+                Some(QueueEvent::FolderAdded { path })
+            } else {
+                Some(QueueEvent::FileChanged {
+                    path,
+                    kind: FsEventKind::Create,
+                })
+            }
+        }
         EventKind::Remove(_) => Some(QueueEvent::FileChanged {
             path,
             kind: FsEventKind::Remove,

@@ -9,6 +9,7 @@ use crate::sync_engine::FileEntry;
 
 const DB_PATH: &str = "sync_rs.db";
 
+#[derive(Debug)]
 pub struct Database {
     conn: rusqlite::Connection,
 }
@@ -123,35 +124,60 @@ impl Database {
         Ok(files_map)
     }
 
-    pub fn update_file_entry(
+    pub fn get_folder_by_path(
+        &self,
+        path_str: &str,
+    ) -> Result<Option<(i64, PathBuf)>, rusqlite::Error> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, local_path FROM synced_folders WHERE local_path = ?1")?;
+        let mut rows = stmt.query_map(params![path_str], |row| {
+            Ok((row.get(0)?, row.get::<_, String>(1)?.into()))
+        })?;
+
+        match rows.next() {
+            Some(Ok(row)) => Ok(Some(row)),
+            Some(Err(e)) => Err(e),
+            None => Ok(None),
+        }
+    }
+
+    pub fn get_all_synced_folders(&self) -> Result<Vec<(i64, PathBuf)>, rusqlite::Error> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, local_path FROM synced_folders")?;
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get::<_, String>(1)?.into())))?;
+
+        let mut folders = Vec::new();
+        for row in rows {
+            folders.push(row?);
+        }
+        Ok(folders)
+    }
+
+    pub fn upsert_file_record(
         &self,
         folder_id: i64,
-        folder_base_path: &Path,
-        file: &FileEntry,
-    ) -> Result<()> {
-        let relative_path = file.path.strip_prefix(folder_base_path).unwrap();
-        let last_modified_secs = file
-            .last_modified
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
+        relative_path: &Path,
+        size_bytes: u64,
+        sha256_hash: &str,
+        modified_secs: u64,
+    ) -> Result<(), rusqlite::Error> {
         self.conn.execute(
             "INSERT INTO file_index (folder_id, relative_path, last_modified_secs, size_bytes, sha256_hash, version)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             VALUES (?1, ?2, ?3, ?4, ?5, 1)
              ON CONFLICT(folder_id, relative_path) DO UPDATE SET
                 last_modified_secs = excluded.last_modified_secs,
                 size_bytes = excluded.size_bytes,
                 sha256_hash = excluded.sha256_hash,
-                version = excluded.version,
+                version = version + 1,
                 last_synced_at = CURRENT_TIMESTAMP",
             params![
                 folder_id,
-                relative_path.to_str().unwrap(),
-                last_modified_secs,
-                file.size,
-                file.hash,
-                file.version
+                relative_path.to_str().expect("Path contains invalid UTF-8"),
+                modified_secs,
+                size_bytes,
+                sha256_hash
             ],
         )?;
         Ok(())

@@ -8,18 +8,25 @@ use notify::{Event as NotifyEvent, RecursiveMode, Result as NotifyResult, Watche
 use crate::sync_engine::FsEventKind;
 use std::{
     path::{Path, PathBuf},
-    sync::mpsc,
+    sync::{Arc, mpsc},
 };
+
+use tokio::sync::Mutex as TokioMutex;
+
 pub mod sync_engine;
 
 mod file_watcher;
 
 #[tokio::main]
 async fn main() {
-    let db = Database::new().expect("Failed to initialize database");
+    let db = Arc::new(TokioMutex::new(
+        Database::new().expect("Failed to initialize database"),
+    ));
     println!("[MAIN] Database initialized successfully.");
 
     let device_id = db
+        .lock()
+        .await
         .get_or_create_device_id()
         .expect("[MAIN] Failed to get or create device ID");
 
@@ -27,7 +34,11 @@ async fn main() {
 
     let (queue, receiver) = EventQueue::new(100);
 
-    let event_loop_handle = tokio::spawn(event_queue::start_event_loop(receiver));
+    let event_loop_handle = tokio::spawn(event_queue::start_event_loop(
+        receiver,
+        db.clone(),
+        queue.clone(),
+    ));
 
     let test_folder = PathBuf::from("test");
     file_watcher::start_file_watcher(test_folder, queue.clone())
