@@ -1,5 +1,6 @@
 use crate::event_queue::{EventQueue, QueueEvent};
 use crate::sync_engine::FsEventKind;
+use notify::event::{ModifyKind, RenameMode};
 use notify::{
     Event, EventKind, RecommendedWatcher, RecursiveMode, Result as NotifyResult, Watcher,
 };
@@ -63,10 +64,35 @@ pub async fn start_file_watcher(folder: PathBuf, event_queue: EventQueue) -> Not
 
 fn map_notify_event(path: PathBuf, kind: &EventKind) -> Option<QueueEvent> {
     match kind {
-        EventKind::Modify(_) => Some(QueueEvent::FileChanged {
-            path,
-            kind: FsEventKind::Modify,
-        }),
+        EventKind::Modify(modify_kind) => match modify_kind {
+            ModifyKind::Name(name_kind) => match name_kind {
+                RenameMode::From => Some(QueueEvent::FileChanged {
+                    path,
+                    kind: FsEventKind::Remove,
+                }),
+
+                RenameMode::To => {
+                    if path.is_dir() {
+                        Some(QueueEvent::FolderAdded { path })
+                    } else {
+                        Some(QueueEvent::FileChanged {
+                            path,
+                            kind: FsEventKind::Create,
+                        })
+                    }
+                }
+
+                _ => Some(QueueEvent::FileChanged {
+                    path,
+                    kind: FsEventKind::Modify,
+                }),
+            },
+
+            _ => Some(QueueEvent::FileChanged {
+                path,
+                kind: FsEventKind::Modify,
+            }),
+        },
         EventKind::Create(_) => {
             if path.is_dir() {
                 Some(QueueEvent::FolderAdded { path })

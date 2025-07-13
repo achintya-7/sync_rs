@@ -5,7 +5,6 @@ mod event_queue;
 use event_queue::{EventQueue, QueueEvent};
 use notify::{Event as NotifyEvent, RecursiveMode, Result as NotifyResult, Watcher};
 
-use crate::sync_engine::FsEventKind;
 use std::{
     path::{Path, PathBuf},
     sync::{Arc, mpsc},
@@ -52,45 +51,4 @@ async fn main() {
     if let Err(e) = event_loop_handle.await {
         eprintln!("[MAIN] Event loop error: {:?}", e);
     }
-}
-
-// Send a test event
-async fn send_test_events(queue: &EventQueue) {
-    queue
-        .send(QueueEvent::FileChanged {
-            path: PathBuf::from("test_sync/file.txt"),
-            kind: FsEventKind::Modify,
-        })
-        .await;
-
-    queue
-        .send(QueueEvent::FolderAdded {
-            path: PathBuf::from("test_sync"),
-        })
-        .await;
-
-    queue.send(QueueEvent::Shutdown).await;
-}
-
-fn notify_test() -> NotifyResult<()> {
-    let (tx, rx) = mpsc::channel::<NotifyResult<NotifyEvent>>();
-
-    // Use recommended_watcher() to automatically select the best implementation
-    // for your platform. The `EventHandler` passed to this constructor can be a
-    // closure, a `std::sync::mpsc::Sender`, a `crossbeam_channel::Sender`, or
-    // another type the trait is implemented for.
-    let mut watcher = notify::recommended_watcher(tx)?;
-
-    // Add a path to be watched. All files and directories at that path and
-    // below will be monitored for changes.
-    watcher.watch(Path::new("test"), RecursiveMode::Recursive)?;
-    // Block forever, printing out events as they come in
-    for res in rx {
-        match res {
-            Ok(event) => println!("event: {:?}", event),
-            Err(e) => println!("watch error: {:?}", e),
-        }
-    }
-
-    Ok(())
 }

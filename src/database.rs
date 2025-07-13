@@ -183,16 +183,10 @@ impl Database {
         Ok(())
     }
 
-    pub fn remove_file_entry(
-        &self,
-        folder_id: i64,
-        folder_base_path: &Path,
-        file_path: &Path,
-    ) -> Result<()> {
-        let relative_path = file_path.strip_prefix(folder_base_path).unwrap();
+    pub fn remove_file_entry(&self, folder_id: i64, file_name: &Path) -> Result<()> {
         self.conn.execute(
             "DELETE FROM file_index WHERE folder_id = ?1 AND relative_path = ?2",
-            params![folder_id, relative_path.to_str().unwrap()],
+            params![folder_id, file_name.to_str().unwrap()],
         )?;
         Ok(())
     }

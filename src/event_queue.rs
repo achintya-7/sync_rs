@@ -141,7 +141,7 @@ async fn handle_file_changed_event(
         }
 
         FsEventKind::Remove => {
-            if let Err(e) = db_guard.remove_file_entry(folder_id, &base_path, relative_path) {
+            if let Err(e) = db_guard.remove_file_entry(folder_id, relative_path) {
                 eprintln!("[HANDLER] DB Error deleting file {:?}: {}", path, e);
             }
         }
@@ -172,10 +172,12 @@ async fn handle_folder_added_event(
     // 2. Scan the folder and add its files by sending events.
     for entry in WalkDir::new(&path).into_iter().filter_map(Result::ok) {
         if entry.file_type().is_file() {
-            queue.send(QueueEvent::FileChanged {
-                path: entry.path().to_path_buf(),
-                kind: FsEventKind::Create,
-            });
+            queue
+                .send(QueueEvent::FileChanged {
+                    path: entry.path().to_path_buf(),
+                    kind: FsEventKind::Create,
+                })
+                .await;
         }
     }
 }
