@@ -1,5 +1,4 @@
 use rusqlite::{Connection, Result, params};
-use std::time::UNIX_EPOCH;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},

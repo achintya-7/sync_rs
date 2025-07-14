@@ -2,13 +2,10 @@ mod database;
 use database::Database;
 
 mod event_queue;
-use event_queue::{EventQueue, QueueEvent};
-use notify::{Event as NotifyEvent, RecursiveMode, Result as NotifyResult, Watcher};
+use event_queue::EventQueue;
+use notify::Watcher;
 
-use std::{
-    path::{Path, PathBuf},
-    sync::{Arc, mpsc},
-};
+use std::{path::PathBuf, sync::Arc};
 
 use tokio::sync::Mutex as TokioMutex;
 
@@ -39,7 +36,7 @@ async fn main() {
         queue.clone(),
     ));
 
-    let test_folder = PathBuf::from("test");
+    let test_folder = start_test_folder();
     file_watcher::start_file_watcher(test_folder, queue.clone())
         .await
         .expect("[MAIN] Failed to start file watcher");
@@ -51,4 +48,15 @@ async fn main() {
     if let Err(e) = event_loop_handle.await {
         eprintln!("[MAIN] Event loop error: {:?}", e);
     }
+}
+
+fn start_test_folder() -> PathBuf {
+    let test_folder = PathBuf::from("test");
+
+    if !test_folder.exists() {
+        std::fs::create_dir_all(&test_folder).expect("[MAIN] Failed to create test folder");
+        println!("[MAIN] Test folder created at: {:?}", test_folder);
+    }
+
+    test_folder
 }
